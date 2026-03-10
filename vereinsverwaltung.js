@@ -1,7 +1,9 @@
 // ─────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────
-const API = 'http://localhost:8000';
+// API_BASE: leer = relative URLs (GUI wird von der API selbst ausgeliefert)
+// Für Entwicklung ohne .exe kann hier 'http://localhost:8000' eingetragen werden
+const API = '';
 
 // ─────────────────────────────────────────────
 // State
@@ -81,9 +83,9 @@ function showView(name) {
 // ─────────────────────────────────────────────
 async function checkHealth() {
   try {
-    await api('/');
+    await api('/health');
     $('statusDot').className = 'status-dot ok';
-    $('statusText').textContent = API;
+    $('statusText').textContent = 'API verbunden';
   } catch {
     $('statusDot').className = 'status-dot err';
     $('statusText').textContent = 'API nicht erreichbar';

@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import logging
+import sys
 from pathlib import Path
 
 # .env laden – muss vor allen anderen Importen geschehen, die os.getenv() nutzen
@@ -8,6 +9,8 @@ load_dotenv(Path(__file__).parent.parent / ".env")  # Projekt-Root/.env
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.database import engine, Base, load_from_bytes
 from app.ftp_sync import load_db, start_auto_sync, stop_auto_sync, sync_now, sync_status
@@ -20,6 +23,22 @@ import app.models.buchung  # noqa: F401
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _gui_dir() -> Path:
+    """
+    Sucht die GUI-Dateien:
+    1. Im PyInstaller-Bundle unter 'gui/'
+    2. Im Entwicklungsmodus: <project-root>/gui/
+    3. Direkt im Projekt-Root (Fallback)
+    """
+    if getattr(sys, "frozen", False):
+        bundle = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+        return bundle / "gui"
+    root = Path(__file__).parent.parent
+    if (root / "gui").exists():
+        return root / "gui"
+    return root
 
 
 @asynccontextmanager
@@ -72,9 +91,9 @@ app.include_router(konten.router,    prefix="/konten",    tags=["Kontenrahmen"])
 app.include_router(buchungen.router, prefix="/buchungen", tags=["Buchungen"])
 
 
-@app.get("/", tags=["Health"])
-def root():
-    return {"status": "ok", "message": "Vereinsverwaltung API läuft"}
+@app.get("/health", tags=["Health"])
+def health():
+    return {"status": "ok"}
 
 
 @app.get("/sync/status", tags=["Sync"])
@@ -87,5 +106,23 @@ def get_sync_status():
 def trigger_sync():
     """Löst sofort einen manuellen Sync aus."""
     return sync_now(engine)
+
+
+# ── Statische GUI-Dateien – MUSS als letztes gemountet werden! ────────────────
+# app.mount("/") fängt ALLE nicht gematchten Pfade ab.
+# Deshalb müssen alle API-Routen davor registriert sein.
+@app.get("/", tags=["GUI"], include_in_schema=False)
+def gui_index():
+    """Liefert die GUI-Startseite aus."""
+    gui = _gui_dir()
+    index = gui / "vereinsverwaltung.html"
+    if index.exists():
+        return FileResponse(str(index), media_type="text/html")
+    return {"status": "ok", "message": "Vereinsverwaltung API läuft – GUI nicht gefunden"}
+
+
+_gui_path = _gui_dir()
+if _gui_path.exists():
+    app.mount("/static", StaticFiles(directory=str(_gui_path)), name="gui")
 
 
