@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vereinsverwaltung</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vereinsverwaltung.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">Verein<span>·</span>SW</div>
+  <nav>
+    <button class="active" onclick="showView('dashboard')">Dashboard</button>
+    <button onclick="showView('mitglieder')">Mitglieder</button>
+    <button onclick="showView('konten')">Konten</button>
+    <button onclick="showView('buchungen')">Buchungen</button>
+    <button onclick="showView('tkonten')">T-Konten</button>
+  </nav>
+  <div class="api-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">verbinde…</span>
+    <span style="color:var(--border2)">│</span>
+    <span id="syncText" style="cursor:pointer" onclick="manualSync()" title="Klicken für manuellen Sync">↑ FTP …</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── DASHBOARD ── -->
+  <div id="view-dashboard" class="view active">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Mitglieder aktiv</div>
+        <div class="stat-value green" id="stat-aktiv">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Mitglieder gesamt</div>
+        <div class="stat-value" id="stat-gesamt">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Buchungen</div>
+        <div class="stat-value" id="stat-buchungen">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Konten</div>
+        <div class="stat-value" id="stat-konten">—</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Letzte Buchungen</th>
+          <th>Soll</th>
+          <th>Haben</th>
+          <th>Betrag</th>
+          <th>Datum</th>
+        </tr></thead>
+        <tbody id="dash-buchungen"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── MITGLIEDER ── -->
+  <div id="view-mitglieder" class="view">
+    <div class="section-head">
+      <div class="section-title">Mitglieder <span id="count-mitglieder"></span></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <select class="filter-input" id="filter-status" onchange="loadMitglieder()">
+          <option value="">Alle Status</option>
+          <option value="aktiv">Aktiv</option>
+          <option value="passiv">Passiv</option>
+          <option value="gast">Gast</option>
+          <option value="ausgetreten">Ausgetreten</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);cursor:pointer">
+          <input type="checkbox" id="filter-alle" onchange="loadMitglieder()" style="accent-color:var(--accent)">
+          Historie
+        </label>
+        <button class="btn btn-primary" onclick="openModal('modal-mitglied')">+ Mitglied</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Gültig von</th>
+          <th>Gültig bis</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tbl-mitglieder"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── KONTEN ── -->
+  <div id="view-konten" class="view">
+    <div class="section-head">
+      <div class="section-title">Kontenrahmen <span id="count-konten"></span></div>
+      <button class="btn btn-primary" onclick="openModal('modal-konto')">+ Konto</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th>
+          <th>Kontonummer</th>
+          <th>Kontoname</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tbl-konten"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── BUCHUNGEN ── -->
+  <div id="view-buchungen" class="view">
+    <div class="section-head">
+      <div class="section-title">Buchungen <span id="count-buchungen"></span></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="openSammelbuchungModal()">⊞ Sammelbuchung</button>
+        <button class="btn btn-primary" onclick="openBuchungModal()">+ Buchung</button>
+      </div>
+    </div>
+    <div class="filters">
+      <input type="date" class="filter-input" id="filter-von" placeholder="Von" onchange="loadBuchungen()">
+      <input type="date" class="filter-input" id="filter-bis" placeholder="Bis" onchange="loadBuchungen()">
+      <select class="filter-input" id="filter-konto" onchange="loadBuchungen()">
+        <option value="">Alle Konten</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" id="btn-gruppieren" onclick="toggleGruppierung()">⊟ Gruppieren</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearBuchungFilter()">✕ Filter</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th id="th-id">ID</th>
+          <th>Datum</th>
+          <th>Soll</th>
+          <th>Haben</th>
+          <th>Betrag</th>
+          <th>Buchungstext</th>
+          <th>Mitglied</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="tbl-buchungen"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── T-KONTEN AUSWERTUNG ── -->
+  <div id="view-tkonten" class="view">
+    <div class="section-head">
+      <div class="section-title">T-Konto Auswertung</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" id="btn-tk-gruppieren" onclick="toggleTKGruppierung()">⊟ Gruppieren</button>
+        <button class="btn btn-ghost" onclick="loadTKonten()">↻ Aktualisieren</button>
+      </div>
+    </div>
+    <div class="tkonto-controls">
+      <input type="date" class="filter-input" id="tk-von" placeholder="Von">
+      <input type="date" class="filter-input" id="tk-bis" placeholder="Bis">
+      <select class="filter-input" id="tk-konto-filter" style="min-width:200px">
+        <option value="">Alle Konten anzeigen</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadTKonten()">Auswerten</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearTKFilter()">✕ Filter</button>
+    </div>
+
+    <div id="tkonto-grid" class="tkonto-grid"></div>
+
+    <div class="uebersicht-wrap">
+      <div class="uebersicht-title">Saldenliste aller Konten</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Konto</th>
+            <th>Kontoname</th>
+            <th style="text-align:right">Soll-Summe</th>
+            <th style="text-align:right">Haben-Summe</th>
+            <th style="text-align:right">Saldo</th>
+            <th>Richtung</th>
+          </tr></thead>
+          <tbody id="tbl-saldenliste"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── MODAL: Mitglied anlegen ── -->
+<div class="modal-overlay" id="modal-mitglied">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Mitglied anlegen</div>
+      <button class="modal-close" onclick="closeModal('modal-mitglied')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="m-name" placeholder="Max Mustermann">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Status</label>
+          <select id="m-status">
+            <option value="aktiv">Aktiv</option>
+            <option value="passiv">Passiv</option>
+            <option value="gast">Gast</option>
+            <option value="ausgetreten">Ausgetreten</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Gültig von</label>
+          <input type="date" id="m-von">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-mitglied')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveMitglied()">Anlegen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Status ändern ── -->
+<div class="modal-overlay" id="modal-statuswechsel">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Statuswechsel</div>
+      <button class="modal-close" onclick="closeModal('modal-statuswechsel')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text-dim);font-family:var(--mono)" id="sw-info"></div>
+      <div class="field-row">
+        <div class="field">
+          <label>Neuer Status</label>
+          <select id="sw-status">
+            <option value="aktiv">Aktiv</option>
+            <option value="passiv">Passiv</option>
+            <option value="gast">Gast</option>
+            <option value="ausgetreten">Ausgetreten</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Gültig ab</label>
+          <input type="date" id="sw-ab">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-statuswechsel')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveStatuswechsel()">Wechsel speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Konto ── -->
+<div class="modal-overlay" id="modal-konto">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-konto-title">Konto anlegen</div>
+      <button class="modal-close" onclick="closeModal('modal-konto')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field">
+          <label>Kontonummer</label>
+          <input type="text" id="k-nr" placeholder="1000">
+        </div>
+        <div class="field">
+          <label>Kontoname</label>
+          <input type="text" id="k-name" placeholder="Kasse">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-konto')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveKonto()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Buchung ── -->
+<div class="modal-overlay" id="modal-buchung">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Buchung erfassen</div>
+      <button class="modal-close" onclick="closeModal('modal-buchung')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field">
+          <label>Sollkonto</label>
+          <select id="b-soll"></select>
+        </div>
+        <div class="field">
+          <label>Habenkonto</label>
+          <select id="b-haben"></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Betrag (€)</label>
+          <input type="number" id="b-betrag" step="0.01" min="0.01" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>Buchungsdatum</label>
+          <input type="date" id="b-datum">
+        </div>
+      </div>
+      <div class="field">
+        <label>Buchungstext</label>
+        <textarea id="b-text" placeholder="z.B. Mitgliedsbeitrag Q1 2025"></textarea>
+      </div>
+      <div class="field">
+        <label>Mitglied (optional)</label>
+        <select id="b-mitglied"><option value="">— kein Mitglied —</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-buchung')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveBuchung()">Buchen</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODAL: Sammelbuchung ── -->
+<div class="modal-overlay" id="modal-sammelbuchung">
+  <div class="modal sb-modal">
+    <div class="modal-header">
+      <div class="modal-title">Sammelbuchung</div>
+      <button class="modal-close" onclick="closeModal('modal-sammelbuchung')">×</button>
+    </div>
+
+    <!-- Step indicators -->
+    <div class="sb-steps">
+      <div class="sb-step active" id="sbstep-1">
+        <div class="sb-step-num">1</div>Mitglieder
+      </div>
+      <div class="sb-step-sep"></div>
+      <div class="sb-step" id="sbstep-2">
+        <div class="sb-step-num">2</div>Beträge &amp; Konten
+      </div>
+      <div class="sb-step-sep"></div>
+      <div class="sb-step" id="sbstep-3">
+        <div class="sb-step-num">3</div>Vorschau
+      </div>
+    </div>
+
+    <!-- ── Panel 1: Mitglieder wählen ── -->
+    <div class="modal-body sb-panel active" id="sbpanel-1">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--text-dim)">
+          <span id="sb-selected-count">0</span> Mitglieder gewählt
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="sbSelectAll()">Alle</button>
+          <button class="btn btn-ghost btn-sm" onclick="sbSelectNone()">Keine</button>
+        </div>
+      </div>
+      <div class="member-grid" id="sb-member-grid"></div>
+    </div>
+
+    <!-- ── Panel 2: Konten + Beträge ── -->
+    <div class="modal-body sb-panel" id="sbpanel-2">
+      <div class="field-row" style="margin-bottom:14px">
+        <div class="field">
+          <label>Sollkonto</label>
+          <select id="sb-soll"></select>
+        </div>
+        <div class="field">
+          <label>Habenkonto</label>
+          <select id="sb-haben"></select>
+        </div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div class="field">
+          <label>Buchungsdatum</label>
+          <input type="date" id="sb-datum">
+        </div>
+        <div class="field">
+          <label>Buchungstext</label>
+          <input type="text" id="sb-text" placeholder="z.B. Mitgliedsbeitrag 2025">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim)">
+          Betrag je Mitglied
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="sb-betrag-alle" class="betrag-input" placeholder="Gleich für alle" step="0.01" min="0.01" style="width:150px">
+          <button class="btn btn-ghost btn-sm" onclick="sbFillAll()">Übernehmen</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="max-height:260px;overflow-y:auto">
+        <table class="sb-betrag-table">
+          <thead><tr>
+            <th>Mitglied</th>
+            <th>Status</th>
+            <th style="text-align:right">Betrag (€)</th>
+          </tr></thead>
+          <tbody id="sb-betrag-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Panel 3: Vorschau ── -->
+    <div class="modal-body sb-panel" id="sbpanel-3">
+      <div class="sb-preview" id="sb-preview-list"></div>
+      <div class="sb-summary">
+        <span><span id="sb-preview-count">0</span> Buchungssätze</span>
+        <span class="sb-total" id="sb-preview-total">0,00 €</span>
+      </div>
+      <div class="sb-progress-wrap" id="sb-progress-wrap" style="display:none">
+        <div class="sb-progress-bar" id="sb-progress-bar"></div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="sb-btn-back"  onclick="sbBack()"   style="display:none">← Zurück</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-sammelbuchung')">Abbrechen</button>
+      <button class="btn btn-primary" id="sb-btn-next" onclick="sbNext()">Weiter →</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="vereinsverwaltung.js"></script>
+</body>
+</html>
