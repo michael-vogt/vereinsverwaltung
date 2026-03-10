@@ -10,6 +10,12 @@ let kontenList = [];
 let mitgliederList = [];
 let editKontoId = null;
 let statuswechselId = null;
+let editBuchungId = null;
+let stornoBuchungId = null;
+let _editOriginal = null;
+let _editSubMode  = 'simple';
+let buchungenGruppiert = false;
+let tkGruppiert = false;
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -307,19 +313,181 @@ async function loadKontenSelect() {
   $('b-mitglied').innerHTML = '<option value="">— kein Mitglied —</option>' +
     mitglieder.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 
-  // Filter dropdown
+  // Filter dropdowns
   $('filter-konto').innerHTML = '<option value="">Alle Konten</option>' +
     kontenList.map(k => `<option value="${k.id}">${k.kontonummer} – ${k.kontoname}</option>`).join('');
+
+  $('filter-mitglied').innerHTML = '<option value="">Alle Mitglieder</option>' +
+    mitglieder.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 }
 
-function openBuchungModal() {
-  $('b-datum').value = today();
-  $('b-betrag').value = '';
-  $('b-text').value = '';
+function _setLocked(locked) {
+  ['b-soll', 'b-haben', 'b-betrag'].forEach(id => {
+    $(id).disabled      = locked;
+    $(id).style.opacity = locked ? '0.45' : '';
+    $(id).style.cursor  = locked ? 'not-allowed' : '';
+  });
+}
+
+function setBuchungEditMode(subMode) {
+  _editSubMode = subMode;
+  $('b-tab-simple').classList.toggle('b-tab-active', subMode === 'simple');
+  $('b-tab-storno').classList.toggle('b-tab-active', subMode === 'storno');
+
+  if (subMode === 'simple') {
+    _setLocked(true);
+    $('b-simple-hint').style.display = '';
+    $('b-storno-hint').style.display = 'none';
+    $('b-save-btn').textContent = 'Speichern';
+    // Felder auf Originalwerte zurücksetzen
+    if (_editOriginal) {
+      $('b-soll').value     = _editOriginal.sollkonto?.id  ?? '';
+      $('b-haben').value    = _editOriginal.habenkonto?.id ?? '';
+      $('b-betrag').value   = _editOriginal.betrag;
+    }
+  } else {
+    _setLocked(false);
+    $('b-simple-hint').style.display = 'none';
+    $('b-storno-hint').style.display = '';
+    $('b-save-btn').textContent = 'Stornieren & neu buchen';
+  }
+}
+
+function _fillBuchungModal(b, mode) {
+  // mode: 'edit' | 'copy' | 'new'
+  _editOriginal   = mode === 'edit' ? b : null;
+  stornoBuchungId = null;
+  editBuchungId   = mode === 'edit' ? b.id : null;
+
+  $('b-modal-title').textContent = {
+    edit: `Buchung #${b.id} bearbeiten`,
+    copy: `Buchung #${b.id} kopieren`,
+    new:  'Buchung erfassen'
+  }[mode];
+
+  $('b-soll').value     = b.sollkonto?.id  ?? b.sollkonto_id  ?? '';
+  $('b-haben').value    = b.habenkonto?.id ?? b.habenkonto_id ?? '';
+  $('b-betrag').value   = b.betrag;
+  $('b-datum').value    = mode === 'copy' ? today() : b.buchungsdatum;
+  $('b-text').value     = b.buchungstext || '';
+  $('b-mitglied').value = b.mitglied?.id  ?? b.mitglied_id   ?? '';
+
+  const isEdit = mode === 'edit';
+  $('b-edit-tabs').style.display    = isEdit ? 'flex' : 'none';
+  $('b-simple-hint').style.display  = 'none';
+  $('b-storno-hint').style.display  = 'none';
+
+  if (isEdit) {
+    // Standard: einfacher Modus mit gesperrten Feldern
+    setBuchungEditMode('simple');
+  } else {
+    _setLocked(false);
+    $('b-save-btn').textContent = mode === 'copy' ? 'Als Kopie buchen' : 'Buchen';
+  }
+
   openModal('modal-buchung');
 }
 
-let buchungenGruppiert = false;
+function openBuchungModal() {
+  editBuchungId   = null;
+  stornoBuchungId = null;
+  _editOriginal   = null;
+  $('b-modal-title').textContent  = 'Buchung erfassen';
+  $('b-save-btn').textContent     = 'Buchen';
+  $('b-edit-tabs').style.display  = 'none';
+  $('b-simple-hint').style.display = 'none';
+  $('b-storno-hint').style.display = 'none';
+  $('b-datum').value   = today();
+  $('b-betrag').value  = '';
+  $('b-text').value    = '';
+  $('b-mitglied').value = '';
+  _setLocked(false);
+  openModal('modal-buchung');
+}
+
+async function editBuchung(id) {
+  try {
+    const b = await api(`/buchungen/${id}`);
+    _fillBuchungModal(b, 'edit');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function copyBuchung(id) {
+  try {
+    const b = await api(`/buchungen/${id}`);
+    _fillBuchungModal(b, 'copy');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function saveBuchung() {
+  const datum    = $('b-datum').value;
+  const text     = $('b-text').value.trim() || null;
+  const mitglied = $('b-mitglied').value ? parseInt($('b-mitglied').value) : null;
+
+  if (!datum) { toast('Buchungsdatum ist Pflicht', 'err'); return; }
+
+  try {
+    if (editBuchungId && _editSubMode === 'simple') {
+      // ── Nur nicht-buchhalterische Felder per PUT ─────────────
+      await api(`/buchungen/${editBuchungId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ buchungsdatum: datum, buchungstext: text, mitglied_id: mitglied })
+      });
+      toast('Buchung aktualisiert');
+
+    } else if (editBuchungId && _editSubMode === 'storno') {
+      // ── Storno + Neubuchung ──────────────────────────────────
+      const soll   = parseInt($('b-soll').value);
+      const haben  = parseInt($('b-haben').value);
+      const betrag = parseFloat($('b-betrag').value);
+      if (soll === haben) { toast('Soll- und Habenkonto dürfen nicht identisch sein', 'err'); return; }
+      if (!betrag || betrag <= 0) { toast('Betrag muss größer 0 sein', 'err'); return; }
+
+      const orig = _editOriginal ?? await api(`/buchungen/${editBuchungId}`);
+      // 1. Stornobuchung
+      await api('/buchungen/', {
+        method: 'POST',
+        body: JSON.stringify({
+          sollkonto_id:  orig.habenkonto.id,
+          habenkonto_id: orig.sollkonto.id,
+          betrag:        orig.betrag,
+          buchungsdatum: today(),
+          buchungstext:  `Storno #${editBuchungId}${orig.buchungstext ? ' – ' + orig.buchungstext : ''}`,
+          mitglied_id:   orig.mitglied?.id ?? null
+        })
+      });
+      // 2. Korrekturbuchung
+      await api('/buchungen/', {
+        method: 'POST',
+        body: JSON.stringify({
+          sollkonto_id: soll, habenkonto_id: haben,
+          betrag: betrag.toFixed(2), buchungsdatum: datum,
+          buchungstext: text, mitglied_id: mitglied
+        })
+      });
+      toast(`Buchung #${editBuchungId} storniert und neu erfasst`);
+
+    } else {
+      // ── Neue Buchung / Kopie ─────────────────────────────────
+      const soll   = parseInt($('b-soll').value);
+      const haben  = parseInt($('b-haben').value);
+      const betrag = parseFloat($('b-betrag').value);
+      if (soll === haben) { toast('Soll- und Habenkonto dürfen nicht identisch sein', 'err'); return; }
+      if (!betrag || betrag <= 0) { toast('Betrag muss größer 0 sein', 'err'); return; }
+      await api('/buchungen/', {
+        method: 'POST',
+        body: JSON.stringify({
+          sollkonto_id: soll, habenkonto_id: haben,
+          betrag: betrag.toFixed(2), buchungsdatum: datum,
+          buchungstext: text, mitglied_id: mitglied
+        })
+      });
+      toast('Buchung erfasst');
+    }
+    closeModal('modal-buchung');
+    await loadBuchungen();
+  } catch(e) { toast(e.message, 'err'); }
+}
 
 function toggleGruppierung() {
   buchungenGruppiert = !buchungenGruppiert;
@@ -383,8 +551,10 @@ function _renderGruppiert(data) {
             <td class="mono" style="color:var(--accent)">${fmt(b.betrag)} €</td>
             <td></td>
             <td>${b.mitglied ? b.mitglied.name : '<span style="color:var(--text-dim)">—</span>'}</td>
-            <td style="text-align:right">
-              <button class="btn btn-danger btn-sm" onclick="deleteBuchung(${b.id})">✕</button>
+            <td style="text-align:right;white-space:nowrap">
+              <button class="btn btn-ghost btn-sm" onclick="editBuchung(${b.id})" title="Bearbeiten">✎</button>
+              <button class="btn btn-ghost btn-sm" onclick="copyBuchung(${b.id})" title="Kopieren">⎘</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteBuchung(${b.id})" title="Löschen">✕</button>
             </td>
           </tr>`);
       }
@@ -404,12 +574,14 @@ function _renderEinzelzeile(b) {
       <td class="mono"><span style="color:var(--accent)">${b.sollkonto.kontonummer}</span> ${b.sollkonto.kontoname}</td>
       <td class="mono"><span style="color:var(--blue)">${b.habenkonto.kontonummer}</span> ${b.habenkonto.kontoname}</td>
       <td class="mono" style="color:var(--accent);font-weight:600">${fmt(b.betrag)} €</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         ${b.buchungstext || '<span style="color:var(--text-dim)">—</span>'}
       </td>
       <td>${b.mitglied ? b.mitglied.name : '<span style="color:var(--text-dim)">—</span>'}</td>
-      <td style="text-align:right">
-        <button class="btn btn-danger btn-sm" onclick="deleteBuchung(${b.id})">✕</button>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="editBuchung(${b.id})" title="Bearbeiten">✎</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyBuchung(${b.id})" title="Kopieren">⎘</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBuchung(${b.id})" title="Löschen">✕</button>
       </td>
     </tr>`;
 }
@@ -425,12 +597,14 @@ function toggleGroup(gid) {
 async function loadBuchungen() {
   try {
     let url = '/buchungen/?';
-    const von   = $('filter-von').value;
-    const bis   = $('filter-bis').value;
-    const konto = $('filter-konto').value;
-    if (von)   url += `von=${von}&`;
-    if (bis)   url += `bis=${bis}&`;
-    if (konto) url += `konto_id=${konto}&`;
+    const von      = $('filter-von').value;
+    const bis      = $('filter-bis').value;
+    const konto    = $('filter-konto').value;
+    const mitglied = $('filter-mitglied').value;
+    if (von)      url += `von=${von}&`;
+    if (bis)      url += `bis=${bis}&`;
+    if (konto)    url += `konto_id=${konto}&`;
+    if (mitglied) url += `mitglied_id=${mitglied}&`;
     const data = await api(url);
     $('count-buchungen').textContent = data.length;
     const tbody = $('tbl-buchungen');
@@ -444,30 +618,6 @@ async function loadBuchungen() {
   } catch(e) { toast('Fehler: ' + e.message, 'err'); }
 }
 
-async function saveBuchung() {
-  const soll   = parseInt($('b-soll').value);
-  const haben  = parseInt($('b-haben').value);
-  const betrag = parseFloat($('b-betrag').value);
-  const datum  = $('b-datum').value;
-  if (soll === haben) { toast('Soll- und Habenkonto dürfen nicht identisch sein', 'err'); return; }
-  if (!betrag || betrag <= 0) { toast('Betrag muss größer 0 sein', 'err'); return; }
-  if (!datum) { toast('Buchungsdatum ist Pflicht', 'err'); return; }
-  const mitglied = $('b-mitglied').value ? parseInt($('b-mitglied').value) : null;
-  try {
-    await api('/buchungen/', {
-      method: 'POST',
-      body: JSON.stringify({
-        sollkonto_id: soll, habenkonto_id: haben,
-        betrag: betrag.toFixed(2), buchungsdatum: datum,
-        buchungstext: $('b-text').value.trim() || null,
-        mitglied_id: mitglied
-      })
-    });
-    closeModal('modal-buchung');
-    toast('Buchung erfasst');
-    loadBuchungen();
-  } catch(e) { toast(e.message, 'err'); }
-}
 
 async function deleteBuchung(id) {
   if (!confirm('Buchung löschen?')) return;
@@ -482,6 +632,7 @@ function clearBuchungFilter() {
   $('filter-von').value = '';
   $('filter-bis').value = '';
   $('filter-konto').value = '';
+  $('filter-mitglied').value = '';
   loadBuchungen();
 }
 
@@ -522,7 +673,6 @@ function jumpToBuchung(id) {
 // ─────────────────────────────────────────────
 // T-Konto Auswertung
 // ─────────────────────────────────────────────
-let tkGruppiert = false;
 
 function toggleTKGruppierung() {
   tkGruppiert = !tkGruppiert;

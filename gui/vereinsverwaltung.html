@@ -130,6 +130,9 @@
       <select class="filter-input" id="filter-konto" onchange="loadBuchungen()">
         <option value="">Alle Konten</option>
       </select>
+      <select class="filter-input" id="filter-mitglied" onchange="loadBuchungen()">
+        <option value="">Alle Mitglieder</option>
+      </select>
       <button class="btn btn-ghost btn-sm" id="btn-gruppieren" onclick="toggleGruppierung()">⊟ Gruppieren</button>
       <button class="btn btn-ghost btn-sm" onclick="clearBuchungFilter()">✕ Filter</button>
     </div>
@@ -288,10 +291,21 @@
 <div class="modal-overlay" id="modal-buchung">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">Buchung erfassen</div>
+      <div class="modal-title" id="b-modal-title">Buchung erfassen</div>
       <button class="modal-close" onclick="closeModal('modal-buchung')">×</button>
     </div>
+    <!-- Modus-Umschalter (nur im Bearbeiten-Kontext sichtbar) -->
+    <div id="b-edit-tabs" style="display:none;border-bottom:1px solid var(--border);display:none;flex-direction:row">
+      <button id="b-tab-simple" class="b-tab b-tab-active" onclick="setBuchungEditMode('simple')">Felder bearbeiten</button>
+      <button id="b-tab-storno" class="b-tab" onclick="setBuchungEditMode('storno')">Storno &amp; Neubuchung</button>
+    </div>
     <div class="modal-body">
+      <div id="b-simple-hint" style="display:none;padding:8px 12px;background:rgba(212,160,23,0.08);border:1px solid rgba(212,160,23,0.25);border-radius:4px;font-size:12px;color:var(--yellow);font-family:var(--mono)">
+        ⚠ Konten und Betrag sind nach der Buchung nicht mehr änderbar.
+      </div>
+      <div id="b-storno-hint" style="display:none;padding:8px 12px;background:rgba(74,158,255,0.07);border:1px solid rgba(74,158,255,0.2);border-radius:4px;font-size:12px;color:var(--blue);font-family:var(--mono);line-height:1.5">
+        ↩ Beim Speichern wird automatisch eine Stornobuchung der Originalbuchung angelegt und diese Korrekturbuchung neu gebucht. Alle Felder sind editierbar.
+      </div>
       <div class="field-row">
         <div class="field">
           <label>Sollkonto</label>
@@ -323,7 +337,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-buchung')">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveBuchung()">Buchen</button>
+      <button class="btn btn-primary" id="b-save-btn" onclick="saveBuchung()">Buchen</button>
     </div>
   </div>
 </div>
