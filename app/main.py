@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────
+    # Tabellen-Schema sicherstellen BEVOR Daten geladen werden.
+    # create_all() auf einer leeren DB ist harmlos; auf einer bereits
+    # befüllten DB würde es Daten überschreiben wenn es danach käme.
+    Base.metadata.create_all(bind=engine)
+
     logger.info("Lade Datenbank...")
     try:
         db_bytes = load_db()
@@ -35,9 +40,6 @@ async def lifespan(app: FastAPI):
             logger.info("Keine bestehende DB gefunden – starte mit leerer DB.")
     except Exception as e:
         logger.error("Laden fehlgeschlagen: %s – starte mit leerer DB.", e)
-
-    # Tabellen anlegen (falls noch nicht vorhanden)
-    Base.metadata.create_all(bind=engine)
 
     # Auto-Sync starten
     start_auto_sync(engine)

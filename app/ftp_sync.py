@@ -35,14 +35,18 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # ── Konfiguration ──────────────────────────────────────────────────────────
-DB_SOURCE     = os.getenv("DB_SOURCE", "").lower()          # "local" | "ftp"
-LOCAL_DB_PATH = os.getenv("LOCAL_DB_PATH", "data.db")
-FTP_HOST      = os.getenv("FTP_HOST", "")
-FTP_USER      = os.getenv("FTP_USER", "")
-FTP_PASSWORD  = os.getenv("FTP_PASSWORD", "")
-FTP_PATH      = os.getenv("FTP_PATH", "/data.db")
-FTP_USE_TLS   = os.getenv("FTP_USE_TLS", "false").lower() == "true"
-SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL", "300"))
+# WICHTIG: os.getenv() wird lazy in den Funktionen gelesen, nicht auf
+# Modulebene. So ist sichergestellt, dass load_dotenv() in main.py bereits
+# ausgeführt wurde bevor die Werte gelesen werden.
+
+def _cfg_db_source()     -> str:   return os.getenv("DB_SOURCE", "").lower()
+def _cfg_local_path()    -> str:   return os.getenv("LOCAL_DB_PATH", "data.db")
+def _cfg_ftp_host()      -> str:   return os.getenv("FTP_HOST", "")
+def _cfg_ftp_user()      -> str:   return os.getenv("FTP_USER", "")
+def _cfg_ftp_password()  -> str:   return os.getenv("FTP_PASSWORD", "")
+def _cfg_ftp_path()      -> str:   return os.getenv("FTP_PATH", "/data.db")
+def _cfg_ftp_tls()       -> bool:  return os.getenv("FTP_USE_TLS", "false").lower() == "true"
+def _cfg_sync_interval() -> int:   return int(os.getenv("SYNC_INTERVAL", "300"))
 
 # ── Interner Zustand ───────────────────────────────────────────────────────
 _last_sync: datetime | None = None
@@ -56,7 +60,7 @@ _sync_timer: threading.Timer | None = None
 # ══════════════════════════════════════════════════════════════════════════
 
 def _load_local() -> bytes | None:
-    path = Path(LOCAL_DB_PATH)
+    path = Path(_cfg_local_path())
     if not path.exists():
         logger.info("Lokale DB '%s' nicht gefunden – starte frisch.", path)
         return None
@@ -66,9 +70,8 @@ def _load_local() -> bytes | None:
 
 
 def _save_local(db_bytes: bytes) -> None:
-    path = Path(LOCAL_DB_PATH)
+    path = Path(_cfg_local_path())
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Atomares Schreiben: zuerst in .tmp, dann umbenennen
     tmp = path.with_suffix(".db.tmp")
     tmp.write_bytes(db_bytes)
     tmp.replace(path)
@@ -80,28 +83,28 @@ def _save_local(db_bytes: bytes) -> None:
 # ══════════════════════════════════════════════════════════════════════════
 
 def _ftp_connect() -> ftplib.FTP:
-    if FTP_USE_TLS:
+    if _cfg_ftp_tls():
         ftp = ftplib.FTP_TLS()
-        ftp.connect(FTP_HOST, 21)
+        ftp.connect(_cfg_ftp_host(), 21)
         ftp.auth()
-        ftp.login(FTP_USER, FTP_PASSWORD)
+        ftp.login(_cfg_ftp_user(), _cfg_ftp_password())
         ftp.prot_p()
     else:
         ftp = ftplib.FTP()
-        ftp.connect(FTP_HOST, 21)
-        ftp.login(FTP_USER, FTP_PASSWORD)
+        ftp.connect(_cfg_ftp_host(), 21)
+        ftp.login(_cfg_ftp_user(), _cfg_ftp_password())
     ftp.set_pasv(True)
     return ftp
 
 
 def _load_ftp() -> bytes | None:
-    if not FTP_HOST:
+    if not _cfg_ftp_host():
         raise ValueError("FTP_HOST nicht konfiguriert.")
     ftp = _ftp_connect()
     buf = io.BytesIO()
     try:
-        ftp.retrbinary(f"RETR {FTP_PATH}", buf.write)
-        logger.info("DB vom FTP geladen: %s (%d Bytes)", FTP_PATH, buf.tell())
+        ftp.retrbinary(f"RETR {_cfg_ftp_path()}", buf.write)
+        logger.info("DB vom FTP geladen: %s (%d Bytes)", _cfg_ftp_path(), buf.tell())
         return buf.getvalue()
     except ftplib.error_perm as e:
         if "550" in str(e):
@@ -115,7 +118,7 @@ def _load_ftp() -> bytes | None:
 def _save_ftp(db_bytes: bytes) -> None:
     ftp = _ftp_connect()
     try:
-        directory = "/".join(FTP_PATH.split("/")[:-1])
+        directory = "/".join(_cfg_ftp_path().split("/")[:-1])
         if directory:
             parts = directory.strip("/").split("/")
             current = ""
@@ -124,9 +127,9 @@ def _save_ftp(db_bytes: bytes) -> None:
                 try:
                     ftp.mkd(current)
                 except ftplib.error_perm:
-                    pass  # Existiert bereits
-        ftp.storbinary(f"STOR {FTP_PATH}", io.BytesIO(db_bytes))
-        logger.info("DB auf FTP gespeichert: %s (%d Bytes)", FTP_PATH, len(db_bytes))
+                    pass
+        ftp.storbinary(f"STOR {_cfg_ftp_path()}", io.BytesIO(db_bytes))
+        logger.info("DB auf FTP gespeichert: %s (%d Bytes)", _cfg_ftp_path(), len(db_bytes))
     finally:
         ftp.quit()
 
@@ -136,10 +139,9 @@ def _save_ftp(db_bytes: bytes) -> None:
 # ══════════════════════════════════════════════════════════════════════════
 
 def _active_backend() -> str:
-    """Gibt das konfigurierte Backend zurück ('local', 'ftp' oder 'none')."""
-    if DB_SOURCE == "local":
+    if _cfg_db_source() == "local":
         return "local"
-    if DB_SOURCE == "ftp" or FTP_HOST:   # Rückwärtskompatibilität: FTP_HOST gesetzt → ftp
+    if _cfg_db_source() == "ftp" or _cfg_ftp_host():
         return "ftp"
     return "none"
 
@@ -170,18 +172,22 @@ def _save_db(db_bytes: bytes) -> None:
 # Engine-Serialisierung
 # ══════════════════════════════════════════════════════════════════════════
 
+# ══════════════════════════════════════════════════════════════════════════
+# Engine-Serialisierung
+# ══════════════════════════════════════════════════════════════════════════
+
 def get_db_bytes_from_engine(engine) -> bytes:
-    """Serialisiert die In-Memory-SQLite zu Bytes."""
-    raw_conn = engine.raw_connection()
-    try:
-        file_conn = sqlite3.connect(":memory:")
-        inner = getattr(raw_conn, "dbapi_connection", raw_conn)
-        inner.backup(file_conn)
-        db_bytes = file_conn.serialize()
-        file_conn.close()
-        return db_bytes
-    finally:
-        raw_conn.close()
+    """
+    Serialisiert die In-Memory-SQLite zu Bytes.
+    Liest direkt aus _sqlite_conn statt über engine.raw_connection(),
+    um Pool-seitiges rollback() beim close() zu vermeiden.
+    """
+    from app.database import _sqlite_conn
+    tmp = sqlite3.connect(":memory:")
+    _sqlite_conn.backup(tmp)
+    db_bytes = tmp.serialize()
+    tmp.close()
+    return db_bytes
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -211,14 +217,14 @@ def start_auto_sync(engine) -> None:
     def _tick():
         global _sync_timer
         sync_now(engine)
-        _sync_timer = threading.Timer(SYNC_INTERVAL, _tick)
+        _sync_timer = threading.Timer(_cfg_sync_interval(), _tick)
         _sync_timer.daemon = True
         _sync_timer.start()
 
-    _sync_timer = threading.Timer(SYNC_INTERVAL, _tick)
+    _sync_timer = threading.Timer(_cfg_sync_interval(), _tick)
     _sync_timer.daemon = True
     _sync_timer.start()
-    logger.info("Auto-Sync gestartet (Backend: %s, Intervall: %ds)", _active_backend(), SYNC_INTERVAL)
+    logger.info("Auto-Sync gestartet (Backend: %s, Intervall: %ds)", _active_backend(), _cfg_sync_interval())
 
 
 def stop_auto_sync() -> None:
@@ -236,11 +242,11 @@ def sync_status() -> dict:
         "backend": backend,
         "last_sync": _last_sync.isoformat() if _last_sync else None,
         "error": _sync_error,
-        "interval_seconds": SYNC_INTERVAL,
+        "interval_seconds": _cfg_sync_interval(),
     }
     if backend == "local":
-        info["local_path"] = str(Path(LOCAL_DB_PATH).resolve())
+        info["local_path"] = str(Path(_cfg_local_path()).resolve())
     elif backend == "ftp":
-        info["ftp_host"] = FTP_HOST
-        info["ftp_path"] = FTP_PATH
+        info["ftp_host"] = _cfg_ftp_host()
+        info["ftp_path"] = _cfg_ftp_path()
     return info
