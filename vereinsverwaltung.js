@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────
-// API_BASE: leer = relative URLs (GUI wird von der API selbst ausgeliefert)
-// Für Entwicklung ohne .exe kann hier 'http://localhost:8000' eingetragen werden
-const API = '';
+// API-Basis-URL: Im Entwicklungsbetrieb auf lokalen Server zeigen.
+// build.bat ersetzt diesen Wert automatisch mit '' (relative URLs) für die .exe.
+const API = 'http://localhost:8000';
 
 // ─────────────────────────────────────────────
 // State
@@ -49,6 +49,20 @@ function toast(msg, type = 'ok') {
 
 function fmt(val) {
   return Number(val).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(iso) {
+  // Wandelt ISO-Datum (YYYY-MM-DD) in deutsches Format (DD.MM.YYYY)
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+function fmtDateShort(iso) {
+  // Kurzes deutsches Format (DD.MM.) für T-Konto-Einträge
+  if (!iso) return '—';
+  const [, m, d] = iso.split('-');
+  return `${d}.${m}.`;
 }
 
 function today() {
@@ -160,7 +174,7 @@ async function loadDashboard() {
         <td class="mono">${b.sollkonto.kontonummer} ${b.sollkonto.kontoname}</td>
         <td class="mono">${b.habenkonto.kontonummer} ${b.habenkonto.kontoname}</td>
         <td class="mono" style="color:var(--accent)">${fmt(b.betrag)} €</td>
-        <td class="mono">${b.buchungsdatum}</td>
+        <td class="mono">${fmtDate(b.buchungsdatum)}</td>
       </tr>`) .join('') : '<tr class="empty-row"><td colspan="5">Keine Buchungen vorhanden</td></tr>';
   } catch(e) { toast('Dashboard-Fehler: ' + e.message, 'err'); }
 }
@@ -526,12 +540,12 @@ function _renderGruppiert(data) {
     if (mehrere && hatMitglieder) {
       // ── Gruppenzeile (klickbar) ──
       rows.push(`
-        <tr class="group-header" id="${gid}" onclick="toggleGroup('${gid}')">
+        <tr class="group-header collapsed" id="${gid}" onclick="toggleGroup('${gid}')">
           <td class="mono" style="color:var(--accent)">
             <span class="group-toggle">▾</span>
             <span class="group-count">${buchungen.length}</span>
           </td>
-          <td class="mono">${rep.buchungsdatum}</td>
+          <td class="mono">${fmtDate(rep.buchungsdatum)}</td>
           <td class="mono"><span style="color:var(--accent)">${rep.sollkonto.kontonummer}</span> ${rep.sollkonto.kontoname}</td>
           <td class="mono"><span style="color:var(--blue)">${rep.habenkonto.kontonummer}</span> ${rep.habenkonto.kontoname}</td>
           <td class="mono" style="color:var(--accent);font-weight:600">${fmt(totalBetrag)} €</td>
@@ -545,9 +559,9 @@ function _renderGruppiert(data) {
       // ── Mitglieder-Unterzeilen ──
       for (const b of buchungen) {
         rows.push(`
-          <tr class="group-member-row" data-group="${gid}">
+          <tr class="group-member-row hidden" data-group="${gid}">
             <td class="mono" style="color:var(--text-dim)">#${b.id}</td>
-            <td class="mono">${b.buchungsdatum}</td>
+            <td class="mono">${fmtDate(b.buchungsdatum)}</td>
             <td></td>
             <td></td>
             <td class="mono" style="color:var(--accent)">${fmt(b.betrag)} €</td>
@@ -572,7 +586,7 @@ function _renderEinzelzeile(b) {
   return `
     <tr>
       <td class="mono" style="color:var(--text-dim)">#${b.id}</td>
-      <td class="mono">${b.buchungsdatum}</td>
+      <td class="mono">${fmtDate(b.buchungsdatum)}</td>
       <td class="mono"><span style="color:var(--accent)">${b.sollkonto.kontonummer}</span> ${b.sollkonto.kontoname}</td>
       <td class="mono"><span style="color:var(--blue)">${b.habenkonto.kontonummer}</span> ${b.habenkonto.kontoname}</td>
       <td class="mono" style="color:var(--accent);font-weight:600">${fmt(b.betrag)} €</td>
@@ -707,6 +721,31 @@ function clearTKFilter() {
   loadTKonten();
 }
 
+function zoomTKonto(kontoId) {
+  // Karte klonen und im Overlay anzeigen
+  const card = $('tkcard-' + kontoId);
+  if (!card) return;
+  const clone = card.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.classList.add('tkonto-card-zoomed');
+  // Zoom-Hint im Klon durch Schließen-Button ersetzen
+  const hint = clone.querySelector('.tkonto-zoom-hint');
+  if (hint) { hint.textContent = '✕'; hint.title = 'Schließen (Esc)'; }
+  // Header-Klick im Klon schließt statt öffnet
+  const hdr = clone.querySelector('.tkonto-card-header');
+  if (hdr) hdr.onclick = closeTKZoom;
+
+  const overlay = $('tkonto-zoom-overlay');
+  overlay.innerHTML = '';
+  overlay.appendChild(clone);
+  overlay.classList.add('open');
+  overlay.focus();
+}
+
+function closeTKZoom() {
+  $('tkonto-zoom-overlay').classList.remove('open');
+}
+
 async function loadTKonten() {
   try {
     if (!kontenList.length) kontenList = await api('/konten/');
@@ -761,7 +800,7 @@ async function loadTKonten() {
         if (!tkGruppiert) {
           return list.map(b => `
             <div class="tkonto-entry" onclick="jumpToBuchung(${b.id})" title="Zur Buchung #${b.id} springen">
-              <span class="entry-date">${b.buchungsdatum}</span>
+              <span class="entry-date" title="${fmtDate(b.buchungsdatum)}">${fmtDateShort(b.buchungsdatum)}</span>
               <span class="entry-text" title="${b.buchungstext || ''}">${b.buchungstext || '—'}</span>
               <span class="entry-amount">${fmt(b.betrag)}</span>
             </div>`).join('');
@@ -785,7 +824,7 @@ async function loadTKonten() {
             // Einzelner Eintrag – normal anzeigen
             return `
               <div class="tkonto-entry" onclick="jumpToBuchung(${rep.id})" title="Zur Buchung #${rep.id} springen">
-                <span class="entry-date">${rep.buchungsdatum}</span>
+                <span class="entry-date" title="${fmtDate(rep.buchungsdatum)}">${fmtDateShort(rep.buchungsdatum)}</span>
                 <span class="entry-text" title="${rep.buchungstext || ''}">${rep.buchungstext || '—'}</span>
                 <span class="entry-amount">${fmt(rep.betrag)}</span>
               </div>`;
@@ -793,16 +832,16 @@ async function loadTKonten() {
 
           // Gruppenheader + eingeklappte Einzeleinträge
           return `
-            <div class="tkonto-group-header" id="${gid}" onclick="toggleTKGroup('${gid}')">
+            <div class="tkonto-group-header collapsed" id="${gid}" onclick="toggleTKGroup('${gid}')">
               <span class="tkonto-group-toggle">▾</span>
               <span class="tkonto-group-label" title="${rep.buchungstext || ''}">${rep.buchungstext || '—'}</span>
-              <span class="tkonto-group-meta">${rep.buchungsdatum} · ${buchungen.length}×</span>
+              <span class="tkonto-group-meta">${fmtDate(rep.buchungsdatum)} · ${buchungen.length}×</span>
               <span class="tkonto-group-sum">${fmt(summe)}</span>
             </div>
-            <div class="tkonto-group-children" id="${gid}-ch">
+            <div class="tkonto-group-children hidden" id="${gid}-ch">
               ${buchungen.map(b => `
                 <div class="tkonto-entry" onclick="jumpToBuchung(${b.id})" title="Zur Buchung #${b.id} springen">
-                  <span class="entry-date">${b.buchungsdatum}</span>
+                  <span class="entry-date" title="${fmtDate(b.buchungsdatum)}">${fmtDateShort(b.buchungsdatum)}</span>
                   <span class="entry-text">${b.mitglied ? b.mitglied.name : (b.buchungstext || '—')}</span>
                   <span class="entry-amount">${fmt(b.betrag)}</span>
                 </div>`).join('')}
@@ -811,28 +850,33 @@ async function loadTKonten() {
       };
 
       return `
-        <div class="tkonto-card">
-          <div class="tkonto-card-header">
+        <div class="tkonto-card" id="tkcard-${k.id}">
+          <div class="tkonto-card-header" onclick="zoomTKonto(${k.id})" title="Klicken zum Vergrößern" style="cursor:pointer">
             <div>
               <span class="tkonto-nr">${k.kontonummer}</span>
               <span class="tkonto-name">${k.kontoname}</span>
             </div>
-            <span class="tkonto-saldo ${saldoClass}">${saldoText}</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="tkonto-saldo ${saldoClass}">${saldoText}</span>
+              <span class="tkonto-zoom-hint">⤢</span>
+            </div>
           </div>
           <div class="tkonto-body">
-            <div class="tkonto-col">
-              <div class="tkonto-col-header">
-                <span>Soll</span>
-                <span class="col-sum">${fmt(sollSum)} €</span>
+            <div class="tkonto-body-inner">
+              <div class="tkonto-col">
+                <div class="tkonto-col-header">
+                  <span>Soll</span>
+                  <span class="col-sum">${fmt(sollSum)} €</span>
+                </div>
+                ${renderEntries(data.soll,  'keine Sollbuchungen',  'soll')}
               </div>
-              ${renderEntries(data.soll,  'keine Sollbuchungen',  'soll')}
-            </div>
-            <div class="tkonto-col">
-              <div class="tkonto-col-header">
-                <span>Haben</span>
-                <span class="col-sum">${fmt(habenSum)} €</span>
+              <div class="tkonto-col">
+                <div class="tkonto-col-header">
+                  <span>Haben</span>
+                  <span class="col-sum">${fmt(habenSum)} €</span>
+                </div>
+                ${renderEntries(data.haben, 'keine Habenbuchungen', 'haben')}
               </div>
-              ${renderEntries(data.haben, 'keine Habenbuchungen', 'haben')}
             </div>
           </div>
         </div>`;
@@ -1087,3 +1131,8 @@ $('b-datum').value = today();
 
 checkHealth();
 loadDashboard();
+
+// Escape schließt T-Konto Zoom
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeTKZoom();
+});

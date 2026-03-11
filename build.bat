@@ -24,7 +24,7 @@ call .venv\Scripts\pip install --quiet -r requirements.txt
 call .venv\Scripts\pip install --quiet pyinstaller
 
 :: 3. GUI-Dateien in gui\ kopieren (erwartet Dateien neben build.bat)
-echo [3/5] Kopiere GUI-Dateien...
+echo [3/5] Kopiere GUI-Dateien und patche API-URL...
 if not exist "gui" mkdir gui
 copy /Y "vereinsverwaltung.html" "gui\" >nul 2>&1
 copy /Y "vereinsverwaltung.css"  "gui\" >nul 2>&1
@@ -36,6 +36,10 @@ if not exist "gui\vereinsverwaltung.html" (
     pause
     exit /b 1
 )
+
+:: API-URL in gui\vereinsverwaltung.js auf '' setzen (relative URLs fuer .exe)
+powershell -Command "(Get-Content 'gui\vereinsverwaltung.js') -replace "const API = 'http://localhost:8000';", "const API = '';" | Set-Content 'gui\vereinsverwaltung.js'"
+echo     API-URL auf relative URLs gesetzt.
 
 :: 4. PyInstaller ausführen
 echo [4/5] Baue .exe mit PyInstaller...

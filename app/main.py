@@ -123,6 +123,6 @@ def gui_index():
 
 _gui_path = _gui_dir()
 if _gui_path.exists():
-    app.mount("/static", StaticFiles(directory=str(_gui_path)), name="gui")
+    app.mount("/", StaticFiles(directory=str(_gui_path)), name="gui")
 
 

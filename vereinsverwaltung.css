@@ -387,7 +387,19 @@
   .saldo-haben { color: var(--blue);   background: rgba(74,158,255,0.1); border: 1px solid rgba(74,158,255,0.2); }
   .saldo-zero  { color: var(--text-dim); background: transparent; border: 1px solid var(--border); }
 
-  .tkonto-body { display: grid; grid-template-columns: 1fr 1fr; }
+  .tkonto-body {
+    overflow-x: auto;
+  }
+  .tkonto-body-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-width: 480px; /* Mindestbreite damit Scrollen einsetzt */
+  }
+  .tkonto-body-inner::-webkit-scrollbar { height: 5px; }
+  .tkonto-body::-webkit-scrollbar { height: 5px; }
+  .tkonto-body::-webkit-scrollbar-track { background: var(--bg); }
+  .tkonto-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  .tkonto-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
   .tkonto-col { padding: 0 0 8px 0; }
   .tkonto-col:first-child { border-right: 2px solid var(--border2); }
   .tkonto-col-header {
@@ -409,8 +421,8 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    padding: 4px 12px;
-    gap: 8px;
+    padding: 4px 8px;
+    gap: 6px;
     border-bottom: 1px solid rgba(42,45,53,0.4);
     transition: background 0.1s;
     cursor: pointer;
@@ -448,7 +460,7 @@
   .tkonto-group-children { }
   .tkonto-group-children.hidden { display: none; }
   .tkonto-group-children .tkonto-entry { padding-left: 24px; }
-  .entry-date   { font-family: var(--mono); font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+  .entry-date   { font-family: var(--mono); font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; max-width: 68px; overflow: hidden; text-overflow: clip; }
   .entry-text   { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 11px; }
   .entry-amount { font-family: var(--mono); font-size: 11px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
   .tkonto-col:first-child .entry-amount { color: var(--accent); }
@@ -694,3 +706,50 @@
 }
 .b-tab:hover { color: var(--text); }
 .b-tab-active { color: var(--accent) !important; border-bottom-color: var(--accent); }
+
+  /* ── T-Konto Zoom Overlay ── */
+  #tkonto-zoom-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    box-sizing: border-box;
+    backdrop-filter: blur(3px);
+  }
+  #tkonto-zoom-overlay.open {
+    display: flex;
+    animation: fadeIn 0.15s ease;
+  }
+  .tkonto-card-zoomed {
+    width: min(820px, 100%);
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+    border-color: var(--border2) !important;
+  }
+  .tkonto-card-zoomed .tkonto-body {
+    overflow-x: auto;
+  }
+  .tkonto-card-zoomed .tkonto-body-inner {
+    min-width: 600px;
+  }
+  .tkonto-card-zoomed .tkonto-entry {
+    padding: 6px 14px;
+  }
+  .tkonto-card-zoomed .entry-date {
+    font-size: 11px;
+    max-width: none;
+  }
+  .tkonto-card-zoomed .entry-text  { font-size: 12px; }
+  .tkonto-card-zoomed .entry-amount { font-size: 12px; }
+  .tkonto-zoom-hint {
+    font-size: 13px;
+    color: var(--text-dim);
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+  .tkonto-card-header:hover .tkonto-zoom-hint { opacity: 1; color: var(--accent); }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vereinsverwaltung</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/vereinsverwaltung.css">
+<link rel="stylesheet" href="vereinsverwaltung.css">
 </head>
 <body>
 
@@ -155,6 +155,8 @@
 
   <!-- ── T-KONTEN AUSWERTUNG ── -->
   <div id="view-tkonten" class="view">
+    <!-- Zoom-Overlay: zeigt eine einzelne Karte groß an -->
+    <div id="tkonto-zoom-overlay" tabindex="-1" onclick="if(event.target===this)closeTKZoom()"></div>
     <div class="section-head">
       <div class="section-title">T-Konto Auswertung</div>
       <div style="display:flex;gap:8px">
@@ -172,7 +174,9 @@
       <button class="btn btn-ghost btn-sm" onclick="clearTKFilter()">✕ Filter</button>
     </div>
 
-    <div id="tkonto-grid" class="tkonto-grid"></div>
+    <div class="tkonto-scroll-wrapper">
+      <div id="tkonto-grid" class="tkonto-grid"></div>
+    </div>
 
     <div class="uebersicht-wrap">
       <div class="uebersicht-title">Saldenliste aller Konten</div>
@@ -445,6 +449,6 @@
 
 <div id="toast"></div>
 
-<script src="/static/vereinsverwaltung.js"></script>
+<script src="vereinsverwaltung.js"></script>
 </body>
 </html>
