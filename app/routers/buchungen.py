@@ -61,7 +61,7 @@ def get_buchungen(
         q = q.filter(Buchung.mitglied_id == mitglied_id)
     if konto_id:
         q = q.filter((Buchung.sollkonto_id == konto_id) | (Buchung.habenkonto_id == konto_id))
-    return q.order_by(Buchung.buchungsdatum.desc()).all()
+    return [b for b in q.order_by(Buchung.buchungsdatum.desc()).all() if b is not None]
 
 
 @router.get("/{buchung_id}", response_model=BuchungResponse, summary="Eine Buchung abrufen")

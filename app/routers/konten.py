@@ -18,7 +18,7 @@ def _get_or_404(konto_id: int, db: Session) -> Konto:
 
 @router.get("/", response_model=List[KontoResponse], summary="Alle Konten abrufen")
 def get_konten(db: Session = Depends(get_db)):
-    return db.query(Konto).order_by(Konto.kontonummer).all()
+    return [k for k in db.query(Konto).order_by(Konto.kontonummer).all() if k is not None]
 
 
 @router.get("/{konto_id}", response_model=KontoResponse, summary="Ein Konto abrufen")

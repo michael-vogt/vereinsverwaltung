@@ -5,3 +5,6 @@ pydantic>=2.0.0
 pytest>=8.0.0
 httpx>=0.27.0        # Für TestClient
 python-dotenv>=1.0.0 # .env-Datei laden
+
+textual>=0.80.0           # TUI
+httpx>=0.27.0             # HTTP-Client für TUI

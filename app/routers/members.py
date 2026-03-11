@@ -38,7 +38,7 @@ def get_members(
         q = q.filter(Member.gueltig_bis == None)
     if mitglied_status:
         q = q.filter(Member.status == mitglied_status)
-    return q.order_by(Member.name).all()
+    return [m for m in q.order_by(Member.name).all() if m is not None]
 
 
 @router.get("/{member_id}", response_model=MemberResponse, summary="Ein Mitglied abrufen")
