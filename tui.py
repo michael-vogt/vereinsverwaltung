@@ -493,7 +493,6 @@ class VereinsApp(App):
         self.app.call_from_thread(self._reload_mitglieder)
         self.app.call_from_thread(self._reload_konten)
         self.app.call_from_thread(self._load_refs)
-        self.app.call_from_thread(self._load_tk_refs)
 
     # ── Navigation ────────────────────────────────────────────────────────────
 
@@ -755,13 +754,18 @@ class VereinsApp(App):
             pass
 
     def _populate_b_selects(self) -> None:
+        konto_opts = [(f"{k['kontonummer']} {k['kontoname']}", str(k["id"]))
+                      for k in self._konten]
         ks = self.query_one("#b-konto", Select)
-        ks.set_options([(f"{k['kontonummer']} {k['kontoname']}", str(k["id"]))
-                        for k in self._konten])
+        ks.set_options(konto_opts)
         ks.clear()
         ms = self.query_one("#b-mitglied", Select)
         ms.set_options([(m["name"], str(m["id"])) for m in self._mitgl])
         ms.clear()
+        # T-Konten Select mitbefüllen – gleiche Quelle, gleicher Zeitpunkt
+        tk = self.query_one("#tk-konto", Select)
+        tk.set_options(konto_opts)
+        tk.clear()
 
     def _reload_buchungen(self) -> None:
         self._fetch_buchungen()
@@ -935,18 +939,6 @@ class VereinsApp(App):
     # ══════════════════════════════════════════════════════════════════════════
     # T-KONTEN
     # ══════════════════════════════════════════════════════════════════════════
-
-    @work(thread=True)
-    def _load_tk_refs(self) -> None:
-        """Konten-Select im T-Konto-Tab befüllen (nach _load_refs)."""
-        import time; time.sleep(0.4)
-        self.call_from_thread(self._populate_tk_select)
-
-    def _populate_tk_select(self) -> None:
-        sel = self.query_one("#tk-konto", Select)
-        sel.set_options([(f"{k['kontonummer']}  {k['kontoname']}", str(k["id"]))
-                         for k in self._konten])
-        sel.clear()
 
     @on(Select.Changed, "#tk-konto")
     def _tk_konto_changed(self, _) -> None:

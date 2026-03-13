@@ -185,6 +185,9 @@
   }
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: rgba(255,255,255,0.025); }
+  tbody tr.kb-row { cursor: pointer; }
+  tbody tr.kb-selected { background: rgba(0,201,122,0.12) !important; outline: 1px solid rgba(0,201,122,0.35); }
+  tbody tr.kb-selected td { color: var(--text) !important; }
   tbody td {
     padding: 10px 14px;
     font-size: 13px;

@@ -23,22 +23,79 @@ python tui.py --api http://localhost:8765
 
 ## Tastaturbelegung
 
-### Navigation (immer aktiv)
+### Browser-GUI
+
+#### Navigation (global)
+
+| Taste | Funktion |
+|-------|----------|
+| `Alt+1` | Dashboard |
+| `Alt+2` | Mitglieder |
+| `Alt+3` | Konten |
+| `Alt+4` | Buchungen |
+| `Alt+5` | T-Konten |
+| `Esc` | Modal schließen / T-Konto-Zoom schließen |
+| `Enter` | Formular speichern (wenn Modal offen) |
+
+#### Mitglieder
+
+| Taste | Funktion |
+|-------|----------|
+| `↑` / `↓` | Zeile auswählen |
+| `F5` | Neues Mitglied anlegen |
+| `F7` | Statuswechsel (nur aktuelle Einträge) |
+| `F8` | Ausgewähltes Mitglied löschen |
+| `R` | Aktualisieren |
+
+#### Konten
+
+| Taste | Funktion |
+|-------|----------|
+| `↑` / `↓` | Zeile auswählen |
+| `F5` | Neues Konto anlegen |
+| `F6` | Ausgewähltes Konto bearbeiten |
+| `F8` | Ausgewähltes Konto löschen |
+| `R` | Aktualisieren |
+
+#### Buchungen
+
+| Taste | Funktion |
+|-------|----------|
+| `↑` / `↓` | Zeile auswählen |
+| `F5` | Neue Buchung erfassen |
+| `F6` | Sammelbuchung öffnen |
+| `F7` | Ausgewählte Buchung bearbeiten (Storno & Neu) |
+| `F9` | Ausgewählte Buchung kopieren |
+| `F8` | Ausgewählte Buchung löschen |
+| `G` | Gruppierung umschalten |
+| `R` | Aktualisieren |
+| `Esc` | Filter zurücksetzen |
+
+#### T-Konten
+
+| Taste | Funktion |
+|-------|----------|
+| `G` | Gruppierung umschalten |
+| `R` | Aktualisieren |
+
+---
+
+### Terminal-UI (TUI)
+
+#### Navigation (global)
 
 | Taste | Funktion |
 |-------|----------|
 | `F1` | Bereich **Mitglieder** |
 | `F2` | Bereich **Konten** |
 | `F3` | Bereich **Buchungen** |
+| `F4` | Bereich **T-Konten** |
 | `Q` | Programm beenden |
-| `Tab` | Fokus zum nächsten Element |
-| `Shift+Tab` | Fokus zum vorherigen Element |
+| `Tab` / `Shift+Tab` | Fokus weiter / zurück |
 | `↑` / `↓` | Zeile in Tabelle navigieren |
 | `Esc` | Modaldialog schließen / Abbrechen |
 
----
-
-### Bereich: Mitglieder
+#### Mitglieder
 
 | Taste | Funktion |
 |-------|----------|
@@ -48,12 +105,9 @@ python tui.py --api http://localhost:8765
 | `F8` | Ausgewähltes Mitglied löschen (mit Bestätigung) |
 | `R` | Liste aktualisieren |
 
-> **Hinweis:** Der Statuswechsel (F7) ist nur für aktuell gültige Einträge möglich  
-> (Einträge ohne „Bis"-Datum). Er legt automatisch einen historisierten Eintrag an.
+> `F7` ist nur für aktuell gültige Einträge möglich (ohne „Bis"-Datum).
 
----
-
-### Bereich: Konten
+#### Konten
 
 | Taste | Funktion |
 |-------|----------|
@@ -62,9 +116,7 @@ python tui.py --api http://localhost:8765
 | `F8` | Ausgewähltes Konto löschen (mit Bestätigung) |
 | `R` | Liste aktualisieren |
 
----
-
-### Bereich: Buchungen
+#### Buchungen
 
 | Taste | Funktion |
 |-------|----------|
@@ -75,19 +127,16 @@ python tui.py --api http://localhost:8765
 | `G` | Buchungen **gruppieren** / Gruppierung aufheben |
 | `R` | Liste aktualisieren |
 
-#### Filter
+> Filter (Von/Bis/Konto/Mitglied): Eingabe + „Suchen" oder `R`. „✕" setzt alle Filter zurück.  
+> Gruppieren fasst Buchungen mit gleichem Soll-/Habenkonto, Datum und Text zusammen (`[3×]`).
 
-Die Filterleiste (Von / Bis / Konto / Mitglied) wird mit **„Suchen"** ausgeführt  
-oder durch Drücken von `R`. **„✕"** setzt alle Filter zurück.
+#### T-Konten
 
-#### Gruppieren
+| Taste | Funktion |
+|-------|----------|
+| `R` | Aktualisieren |
 
-Buchungen mit gleichem Soll-/Habenkonto, Datum und Text werden  
-zu einer Zeile zusammengefasst. Betrag = Summe, Anzahl = `[3×]`.
-
----
-
-### Modaldialoge
+#### Modaldialoge
 
 | Taste | Funktion |
 |-------|----------|

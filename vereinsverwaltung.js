@@ -193,7 +193,7 @@ async function loadMitglieder() {
     $('count-mitglieder').textContent = data.length;
     const tbody = $('tbl-mitglieder');
     tbody.innerHTML = data.length ? data.map(m => `
-      <tr>
+      <tr data-id="${m.id}" onclick="selectRow(this,'tbl-mitglieder')" class="kb-row">
         <td class="mono" style="color:var(--text-dim)">#${m.id}</td>
         <td style="font-weight:500">${m.name}</td>
         <td><span class="badge badge-${m.status}">${m.status}</span></td>
@@ -263,7 +263,7 @@ async function loadKonten() {
     $('count-konten').textContent = data.length;
     const tbody = $('tbl-konten');
     tbody.innerHTML = data.length ? data.map(k => `
-      <tr>
+      <tr data-id="${k.id}" onclick="selectRow(this,'tbl-konten')" class="kb-row">
         <td class="mono" style="color:var(--text-dim)">#${k.id}</td>
         <td class="mono" style="color:var(--accent)">${k.kontonummer}</td>
         <td>${k.kontoname}</td>
@@ -584,7 +584,7 @@ function _renderGruppiert(data) {
 
 function _renderEinzelzeile(b) {
   return `
-    <tr>
+    <tr data-id="${b.id}" onclick="selectRow(this,'tbl-buchungen')" class="kb-row">
       <td class="mono" style="color:var(--text-dim)">#${b.id}</td>
       <td class="mono">${fmtDate(b.buchungsdatum)}</td>
       <td class="mono"><span style="color:var(--accent)">${b.sollkonto.kontonummer}</span> ${b.sollkonto.kontoname}</td>
@@ -1133,6 +1133,192 @@ checkHealth();
 loadDashboard();
 
 // Escape schließt T-Konto Zoom
+// ─────────────────────────────────────────────
+// Tastatursteuerung
+// ─────────────────────────────────────────────
+
+// ── Zeilen-Selektion ──────────────────────────
+const TABLE_FOR_VIEW = {
+  mitglieder: 'tbl-mitglieder',
+  konten:     'tbl-konten',
+  buchungen:  'tbl-buchungen',
+};
+
+function selectRow(tr, tbodyId) {
+  const tbody = $(tbodyId);
+  tbody.querySelectorAll('tr.kb-row').forEach(r => r.classList.remove('kb-selected'));
+  tr.classList.add('kb-selected');
+  tr.scrollIntoView({ block: 'nearest' });
+}
+
+function selectedRow(tbodyId) {
+  return $(tbodyId)?.querySelector('tr.kb-selected') || null;
+}
+
+function selectedId(tbodyId) {
+  return selectedRow(tbodyId)?.dataset?.id || null;
+}
+
+function moveSelection(tbodyId, dir) {
+  const tbody = $(tbodyId);
+  if (!tbody) return;
+  const rows = [...tbody.querySelectorAll('tr.kb-row')];
+  if (!rows.length) return;
+  const cur = tbody.querySelector('tr.kb-selected');
+  let idx = cur ? rows.indexOf(cur) + dir : (dir > 0 ? 0 : rows.length - 1);
+  idx = Math.max(0, Math.min(rows.length - 1, idx));
+  selectRow(rows[idx], tbodyId);
+}
+
+// Aktuell aktive View ermitteln
+function activeView() {
+  const v = document.querySelector('.view.active');
+  return v ? v.id.replace('view-', '') : null;
+}
+
+// Offenes Modal ermitteln (erstes gefundenes)
+function openModalId() {
+  const m = document.querySelector('.modal-overlay.open');
+  return m ? m.id : null;
+}
+
+// Nav-Button für View klicken (löst showView + active-Klasse aus)
+function navTo(name) {
+  const btn = document.querySelector(`nav button[onclick*="'${name}'"]`);
+  if (btn) btn.click();
+}
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeTKZoom();
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  const inInput = ['input', 'textarea', 'select'].includes(tag);
+  const modal   = openModalId();
+
+  // ── Escape: Modal / Zoom schließen ────────────────────────────────────────
+  if (e.key === 'Escape') {
+    if ($('tkonto-zoom-overlay')?.classList.contains('open')) {
+      closeTKZoom(); e.preventDefault(); return;
+    }
+    if (modal) {
+      closeModal(modal); e.preventDefault(); return;
+    }
+  }
+
+  // ── In Modals: Enter = Speichern ──────────────────────────────────────────
+  if (modal && e.key === 'Enter' && !e.shiftKey) {
+    // Nicht auslösen wenn Fokus auf Button liegt (verhindert Doppel-Submit)
+    if (tag === 'button') return;
+    if (modal === 'modal-mitglied')       { e.preventDefault(); saveMitglied(); return; }
+    if (modal === 'modal-statuswechsel')  { e.preventDefault(); saveStatuswechsel(); return; }
+    if (modal === 'modal-konto')          { e.preventDefault(); saveKonto(); return; }
+    if (modal === 'modal-buchung')        { e.preventDefault(); saveBuchung(); return; }
+  }
+
+  // ── Alles folgende: nicht in Eingabefeldern auslösen ─────────────────────
+  if (inInput || modal) return;
+
+  const view = activeView();
+
+  // ── Globale Shortcuts (immer aktiv) ───────────────────────────────────────
+  if (e.altKey) {
+    switch (e.key) {
+      case '1': e.preventDefault(); navTo('dashboard');  return;
+      case '2': e.preventDefault(); navTo('mitglieder'); return;
+      case '3': e.preventDefault(); navTo('konten');     return;
+      case '4': e.preventDefault(); navTo('buchungen');  return;
+      case '5': e.preventDefault(); navTo('tkonten');    return;
+    }
+  }
+
+  // ── View-spezifische Shortcuts ────────────────────────────────────────────
+  // Pfeiltasten: Zeilen-Navigation (funktioniert in allen Listen-Views)
+  const listTbody = TABLE_FOR_VIEW[view];
+  if (listTbody && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    moveSelection(listTbody, e.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+
+  switch (view) {
+
+    case 'mitglieder': {
+      const tid = selectedId('tbl-mitglieder');
+      const m   = tid ? mitgliederList.find(x => String(x.id) === tid) : null;
+      if (e.key === 'F5') { e.preventDefault(); openModal('modal-mitglied'); }
+      if (e.key === 'F7' && m && !m.gueltig_bis) {
+        e.preventDefault(); openStatuswechsel(m.id, m.name, m.status);
+      }
+      if (e.key === 'F8' && tid) { e.preventDefault(); deleteMitglied(Number(tid)); }
+      if (e.key === 'r')  { e.preventDefault(); loadMitglieder(); }
+      break;
+    }
+
+    case 'konten': {
+      const tid = selectedId('tbl-konten');
+      const k   = tid ? kontenList.find(x => String(x.id) === tid) : null;
+      if (e.key === 'F5') { e.preventDefault(); openModal('modal-konto'); }
+      if (e.key === 'F6' && k) {
+        e.preventDefault(); editKonto(k.id, k.kontonummer, k.kontoname);
+      }
+      if (e.key === 'F8' && tid) { e.preventDefault(); deleteKonto(Number(tid)); }
+      if (e.key === 'r')  { e.preventDefault(); loadKonten(); }
+      break;
+    }
+
+    case 'buchungen': {
+      const tid = selectedId('tbl-buchungen');
+      if (e.key === 'F5') { e.preventDefault(); openBuchungModal(); }
+      if (e.key === 'F6') { e.preventDefault(); openSammelbuchungModal(); }
+      if (e.key === 'F7' && tid) { e.preventDefault(); editBuchung(Number(tid)); }
+      if (e.key === 'F9' && tid) { e.preventDefault(); copyBuchung(Number(tid)); }
+      if (e.key === 'F8' && tid) { e.preventDefault(); deleteBuchung(Number(tid)); }
+      if (e.key === 'g')  { e.preventDefault(); toggleGruppierung(); }
+      if (e.key === 'r')  { e.preventDefault(); loadBuchungen(); }
+      if (e.key === 'Escape') { e.preventDefault(); clearBuchungFilter(); }
+      break;
+    }
+
+    case 'tkonten':
+      if (e.key === 'g')  { e.preventDefault(); toggleTKGruppierung(); }
+      if (e.key === 'r')  { e.preventDefault(); loadTKonten(); }
+      break;
+
+    case 'dashboard':
+      if (e.key === 'r')  { e.preventDefault(); loadDashboard(); }
+      break;
+  }
 });
+
+// Tooltip-Leiste mit Tastaturkürzeln (unten einblenden)
+(function initKbHints() {
+  const HINTS = {
+    dashboard:  'Alt+1-5 Navigation  ·  R Aktualisieren',
+    mitglieder: '↑↓ Auswahl  ·  F5 Neu  ·  F7 Status  ·  F8 Löschen  ·  R Aktualisieren',
+    konten:     '↑↓ Auswahl  ·  F5 Neu  ·  F6 Bearbeiten  ·  F8 Löschen  ·  R Aktualisieren',
+    buchungen:  '↑↓ Auswahl  ·  F5 Neu  ·  F6 Sammelbuchung  ·  F7 Bearbeiten  ·  F9 Kopieren  ·  F8 Löschen  ·  G Gruppieren  ·  R Aktualisieren  ·  Esc Filter reset',
+    tkonten:    'Alt+1-5 Navigation  ·  G Gruppieren  ·  R Aktualisieren',
+  };
+  // Leiste erzeugen
+  const bar = document.createElement('div');
+  bar.id = 'kb-hint-bar';
+  bar.style.cssText = [
+    'position:fixed', 'bottom:0', 'left:0', 'right:0',
+    'height:22px', 'background:#13151a', 'color:#c8ccd8',
+    'font-size:11px', 'font-family:IBM Plex Mono,monospace',
+    'display:flex', 'align-items:center', 'padding:0 16px',
+    'border-top:1px solid #1f2937', 'z-index:50',
+    'user-select:none', 'letter-spacing:0.02em',
+  ].join(';');
+  document.body.appendChild(bar);
+
+  function updateHints() {
+    const v = activeView() || 'dashboard';
+    bar.textContent = HINTS[v] || '';
+  }
+
+  // Observer: View-Wechsel mitbekommen
+  const observer = new MutationObserver(updateHints);
+  document.querySelectorAll('.view').forEach(v =>
+    observer.observe(v, { attributes: true, attributeFilter: ['class'] })
+  );
+  updateHints();
+})();

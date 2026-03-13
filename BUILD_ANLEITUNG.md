@@ -133,3 +133,5 @@ icon="mein_icon.ico",
 | Browser öffnet sich nicht | `gui\vereinsverwaltung.html` manuell im Browser öffnen |
 | API antwortet nicht | Prüfen ob Port 8765 von Firewall blockiert wird |
 | .exe wird von Antivirus blockiert | PyInstaller-EXEs lösen manchmal Fehlalarm aus – Ausnahme hinzufügen |
+
+
